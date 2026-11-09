@@ -1,0 +1,16 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Weekplan main window permissions",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-show",
+    "core:window:allow-set-focus",
+    "sql:default",
+    "sql:allow-execute",
+    "notification:default",
+    "autostart:default",
+    "dialog:default"
+  ]
+}

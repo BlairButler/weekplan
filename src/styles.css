@@ -455,3 +455,31 @@ body.is-palette-dragging, body.is-palette-dragging * { cursor: grabbing !importa
 .plan-steps { margin: 0 0 6px; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: var(--text-2); }
 .plan-steps button { width: 100%; }
 .plan-box .link { display: block; margin: 6px auto 0; }
+
+/* ---------- multi-select ---------- */
+.bubble.is-selected { box-shadow: 0 0 0 2px var(--accent), 0 2px 8px rgb(0 0 0 / 0.15); z-index: 4; }
+.select-box {
+  position: absolute;
+  z-index: 20;
+  border: 1px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border-radius: 4px;
+  pointer-events: none;
+}
+.selection-hint {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  background: var(--accent);
+  color: #fff;
+  font-size: 12px;
+  padding: 5px 12px;
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+  z-index: 30;
+  pointer-events: none;
+  white-space: nowrap;
+}
+.week { position: relative; }
+.menu-head { font-size: 11px; color: var(--text-2); padding: 4px 10px 2px; text-transform: uppercase; letter-spacing: 0.05em; }

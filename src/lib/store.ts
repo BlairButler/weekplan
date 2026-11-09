@@ -44,6 +44,7 @@ interface State {
   redoStack: CalEvent[][];
   editor: Editor | null;
   checkIn: Occ | null;
+  selected: string[]; // occIds of multi-selected bubbles
 
   init(): Promise<void>;
   setView(v: View): void;
@@ -58,6 +59,10 @@ interface State {
   deleteTemplate(id: string): void;
   applyTemplate(id: string, weekStart: number): void;
   setTemplatesOpen(open: boolean): void;
+  setSelected(ids: string[]): void;
+  moveOccs(occs: Occ[], delta: number): void;
+  patchOccs(occs: Occ[], patch: Partial<CalEvent>): void;
+  deleteOccs(occs: Occ[]): void;
   deleteTask(id: string): void;
   setTaskBlockDone(occ: Occ, done: boolean): void;
   toggleTaskFromList(task: Task): void;
@@ -139,6 +144,7 @@ export const useStore = create<State>((set, get) => ({
   redoStack: [],
   editor: null,
   checkIn: null,
+  selected: [],
 
   async init() {
     if (initStarted) return;
@@ -165,8 +171,8 @@ export const useStore = create<State>((set, get) => ({
     get().tick(Date.now());
   },
 
-  setView: (view) => set({ view }),
-  setAnchor: (anchor) => set({ anchor }),
+  setView: (view) => set({ view, selected: [] }),
+  setAnchor: (anchor) => set({ anchor, selected: [] }),
 
   tick(now) {
     set({ now });
@@ -262,6 +268,40 @@ export const useStore = create<State>((set, get) => ({
   },
 
   setTemplatesOpen: (templatesOpen) => set({ templatesOpen }),
+
+  setSelected: (selected) => set({ selected }),
+
+  moveOccs(occs, delta) {
+    if (!delta || !occs.length) return;
+    const { events, ids } = editOccs(get().events, occs, (e) => ({ ...e, start: e.start + delta, end: e.end + delta }));
+    get().commitEvents(events);
+    set({ selected: ids });
+  },
+
+  patchOccs(occs, patch) {
+    if (!occs.length) return;
+    if (patch.done !== undefined) {
+      // one-off tasks are complete when their block is ticked
+      const onceIds = new Set(get().tasks.filter((t) => t.repeat.kind === "once").map((t) => t.id));
+      const touched = new Set(occs.map((o) => o.taskId).filter((id): id is string => !!id && onceIds.has(id)));
+      if (touched.size) {
+        const updated = get().tasks.map((t) => (touched.has(t.id) ? { ...t, completedAt: patch.done ? Date.now() : null } : t));
+        set({ tasks: updated });
+        void get().backend?.upsert("tasks", updated.filter((t) => touched.has(t.id)));
+      }
+    }
+    const { events, ids } = editOccs(get().events, occs, (e) => ({ ...e, ...patch }));
+    get().commitEvents(events);
+    set({ selected: ids });
+  },
+
+  deleteOccs(occs) {
+    if (!occs.length) return;
+    const { events } = editOccs(get().events, occs, () => null);
+    get().commitEvents(events);
+    set({ selected: [] });
+    get().showToast(`Deleted ${occs.length} event${occs.length === 1 ? "" : "s"}`, true);
+  },
 
   deleteTask(id) {
     set({ tasks: get().tasks.filter((t) => t.id !== id) });
@@ -463,6 +503,49 @@ export const useStore = create<State>((set, get) => ({
     set({ categories: s.categories, events: s.events, presets: s.presets, tasks, templates, settings, undoStack: [], redoStack: [] });
   },
 }));
+
+/**
+ * Applies `fn` to several occurrences in one change (one undo step). Recurring
+ * occurrences are detached from their series first. `fn` returning null deletes.
+ * Returns the new events and the resulting occIds (for keeping the selection).
+ */
+export function editOccs(
+  events: CalEvent[],
+  occs: Occ[],
+  fn: (e: CalEvent) => CalEvent | null,
+): { events: CalEvent[]; ids: string[] } {
+  const now = Date.now();
+  const byBase = new Map<string, Occ[]>();
+  for (const o of occs) if (!o.ghost) byBase.set(o.baseId, [...(byBase.get(o.baseId) ?? []), o]);
+  const ids: string[] = [];
+  const out: CalEvent[] = [];
+  const added: CalEvent[] = [];
+  for (const e of events) {
+    const mine = byBase.get(e.id);
+    if (!mine) {
+      out.push(e);
+      continue;
+    }
+    if (!e.recurrence) {
+      const next = fn(e);
+      if (next) {
+        out.push({ ...next, updatedAt: now });
+        ids.push(next.id);
+      }
+      continue;
+    }
+    // detach each selected occurrence of a series
+    out.push({ ...e, exdates: [...e.exdates, ...mine.map((o) => o.origStart)] });
+    for (const o of mine) {
+      const next = fn({ ...stripOcc(o), id: crypto.randomUUID(), recurrence: null, exdates: [], updatedAt: now });
+      if (next) {
+        added.push(next);
+        ids.push(next.id);
+      }
+    }
+  }
+  return { events: [...out, ...added], ids };
+}
 
 export function stripOcc(o: Occ): CalEvent {
   const { occId: _a, baseId: _b, origStart: _c, recurring: _d, ghost: _e, ...ev } = o;

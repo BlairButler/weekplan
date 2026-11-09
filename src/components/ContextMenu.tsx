@@ -7,6 +7,7 @@ export interface MenuState {
   x: number;
   y: number;
   occ: Occ;
+  group?: Occ[]; // set when right-clicking inside a multi-selection
 }
 
 export function ContextMenu({ state, onClose }: { state: MenuState; onClose: () => void }) {
@@ -36,6 +37,42 @@ export function ContextMenu({ state, onClose }: { state: MenuState; onClose: () 
 
   const left = Math.min(state.x, window.innerWidth - 220);
   const top = Math.min(state.y, window.innerHeight - 260);
+
+  if (state.group) {
+    const group = state.group;
+    const { patchOccs, deleteOccs } = useStore.getState();
+    const tasks = group.filter((o) => o.taskId);
+    const allDone = tasks.length > 0 && tasks.every((o) => o.done);
+    const nonTasks = group.filter((o) => !o.taskId);
+    return (
+      <div className="menu" ref={ref} style={{ left, top }}>
+        <div className="menu-head">{group.length} selected</div>
+        {tasks.length > 0 && (
+          <button onClick={() => act(() => patchOccs(tasks, { done: !allDone }))}>
+            <ModeIcon mode="task" done={!allDone} /> {allDone ? "Mark not done" : `Mark ${tasks.length === group.length ? "all" : tasks.length + " tasks"} done`}
+          </button>
+        )}
+        {nonTasks.length > 0 && <button onClick={() => setSub(sub === "mode" ? null : "mode")}>Mode ›</button>}
+        {sub === "mode" &&
+          (["fixed", "flexible", "target-fill"] as Mode[]).map((m) => (
+            <button key={m} className="sub" onClick={() => act(() => patchOccs(nonTasks, { mode: m }))}>
+              <ModeIcon mode={m} /> {MODE_LABEL[m]}
+            </button>
+          ))}
+        <button onClick={() => setSub(sub === "category" ? null : "category")}>Category ›</button>
+        {sub === "category" &&
+          categories.map((c) => (
+            <button key={c.id} className="sub" onClick={() => act(() => patchOccs(group, { categoryId: c.id }))}>
+              <i className="swatch" style={{ background: c.colour }} /> {c.name}
+            </button>
+          ))}
+        <hr />
+        <button className="danger" onClick={() => act(() => deleteOccs(group))}>
+          Delete {group.length} events
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="menu" ref={ref} style={{ left, top }}>

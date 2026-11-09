@@ -63,7 +63,7 @@ export default function App() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement;
-      if (t.closest("input, textarea, select, [contenteditable]")) return;
+      if (t?.closest?.("input, textarea, select, [contenteditable]")) return;
       const s = useStore.getState();
       if (e.metaKey && e.key.toLowerCase() === "z") {
         e.preventDefault();
